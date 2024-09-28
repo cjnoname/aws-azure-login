@@ -1,0 +1,21 @@
+{
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.detectIndentation": false,
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "prettier.trailingComma": "none",
+  "prettier.tabWidth": 2,
+  "prettier.semi": true,
+  "prettier.singleQuote": false,
+  "prettier.printWidth": 100,
+  "prettier.arrowParens": "avoid",
+  "terminal.integrated.scrollback": 2500,
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "git.autofetch": "all",
+  "git.mergeEditor": false,
+  "debug.javascript.autoAttachFilter": "smart",
+  "colorize.languages": ["typescript"]
+}
