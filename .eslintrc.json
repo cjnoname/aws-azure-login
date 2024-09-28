@@ -8,7 +8,8 @@
     "ecmaVersion": 2018,
     "sourceType": "module",
     "project": "./tsconfig.json",
-    "include": ["src/**/*.ts", "typings/**/*.ts"]
+    "include": ["src/**/*.ts", "typings/**/*.ts"],
+    "warnOnUnsupportedTypeScriptVersion": false
   },
   "plugins": ["@typescript-eslint"],
   "extends": [

@@ -5,7 +5,6 @@ import zlib from "zlib";
 import { STS, STSClientConfig } from "@aws-sdk/client-sts";
 import { load } from "cheerio";
 import { v4 } from "uuid";
-import puppeteer, { HTTPRequest } from "puppeteer";
 import querystring from "querystring";
 import _debug from "debug";
 import { CLIError } from "./CLIError";
@@ -15,6 +14,7 @@ import { paths } from "./paths";
 import mkdirp from "mkdirp";
 import { Agent } from "https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
+import { Browser, ElementHandle, HTTPRequest, launch, Page } from "puppeteer";
 
 const debug = _debug("aws-azure-login");
 
@@ -46,24 +46,22 @@ const states = [
     name: "username input",
     selector: `input[name="loginfmt"]:not(.moveOffScreen)`,
     async handler(
-      page: puppeteer.Page,
-      _selected: puppeteer.ElementHandle,
+      page: Page,
+      _selected: ElementHandle,
       noPrompt: boolean,
       defaultUsername: string
     ): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
         debug("Found error message. Displaying");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const errorMessage = await page.evaluate(
-          // eslint-disable-next-line
           (err) => err.textContent,
           error
         );
         console.log(errorMessage);
       }
 
-      let username;
+      let username: string;
 
       if (noPrompt && defaultUsername) {
         debug("Not prompting user for username");
@@ -94,7 +92,6 @@ const states = [
       }
 
       debug("Typing username");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await page.keyboard.type(username);
 
       await Bluebird.delay(500);
@@ -129,21 +126,17 @@ const states = [
   {
     name: "account selection",
     selector: `#aadTile > div > div.table-cell.tile-img > img`,
-    async handler(page: puppeteer.Page): Promise<void> {
+    async handler(page: Page): Promise<void> {
       debug("Multiple accounts associated with username.");
       const aadTile = await page.$("#aadTileTitle");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const aadTileMessage: string = await page.evaluate(
-        // eslint-disable-next-line
-        (a) => a.textContent,
+      const aadTileMessage: string | null | undefined = await page.evaluate(
+        (a) => a?.textContent,
         aadTile
       );
 
       const msaTile = await page.$("#msaTileTitle");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const msaTileMessage: string = await page.evaluate(
-        // eslint-disable-next-line
-        (m) => m.textContent,
+      const msaTileMessage: string | null | undefined = await page.evaluate(
+        (m) => m?.textContent,
         msaTile
       );
 
@@ -187,35 +180,27 @@ const states = [
   {
     name: "passwordless",
     selector: `input[value='Send notification']`,
-    async handler(page: puppeteer.Page) {
+    async handler(page: Page) {
       debug("Sending notification");
-      // eslint-disable-next-line
       await page.click("input[value='Send notification']");
       debug("Waiting for auth code");
-      // eslint-disable-next-line
       await page.waitForSelector(`#idRemoteNGC_DisplaySign`, {
         visible: true,
         timeout: 60000,
       });
       debug("Printing the message displayed");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const messageElement = await page.$(
         "#idDiv_RemoteNGC_PollingDescription"
       );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const codeElement = await page.$("#idRemoteNGC_DisplaySign");
-      // eslint-disable-next-line
       const message = await page.evaluate(
-        // eslint-disable-next-line
-        (el) => el.textContent,
+        (el) => el?.textContent,
         messageElement
       );
       console.log(message);
       debug("Printing the auth code");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const authCode = await page.evaluate(
-        // eslint-disable-next-line
-        (el) => el.textContent,
+        (el) => el?.textContent,
         codeElement
       );
       console.log(authCode);
@@ -230,8 +215,8 @@ const states = [
     name: "password input",
     selector: `input[name="Password"]:not(.moveOffScreen),input[name="passwd"]:not(.moveOffScreen)`,
     async handler(
-      page: puppeteer.Page,
-      _selected: puppeteer.ElementHandle,
+      page: Page,
+      _selected: ElementHandle,
       noPrompt: boolean,
       _defaultUsername: string,
       defaultPassword: string
@@ -239,9 +224,7 @@ const states = [
       const error = await page.$(".alert-error");
       if (error) {
         debug("Found error message. Displaying");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const errorMessage = await page.evaluate(
-          // eslint-disable-next-line
           (err) => err.textContent,
           error
         );
@@ -249,7 +232,7 @@ const states = [
         defaultPassword = ""; // Password error. Unset the default and allow user to enter it.
       }
 
-      let password;
+      let password: string;
 
       if (noPrompt && defaultPassword) {
         debug("Not prompting user for password");
@@ -269,7 +252,6 @@ const states = [
       await page.focus(`input[name="Password"],input[name="passwd"]`);
 
       debug("Typing password");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       await page.keyboard.type(password);
 
       debug("Submitting form");
@@ -283,27 +265,22 @@ const states = [
     name: "TFA instructions",
     selector: `#idDiv_SAOTCAS_Description`,
     async handler(
-      page: puppeteer.Page,
-      selected: puppeteer.ElementHandle
+      page: Page,
+      selected: ElementHandle
     ): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const descriptionMessage = await page.evaluate(
-        // eslint-disable-next-line
         (description) => description.textContent,
         selected
       );
       console.log(descriptionMessage);
       debug("Checking if authentication code is displayed");
-      // eslint-disable-next-line
-      if (descriptionMessage.includes("enter the number shown to sign in")) {
+      if (descriptionMessage?.includes("enter the number shown to sign in")) {
         const authenticationCodeElement = await page.$(
           "#idRichContext_DisplaySign"
         );
         debug("Reading the authentication code");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const authenticationCode = await page.evaluate(
-          // eslint-disable-next-line
-          (d) => d.textContent,
+          (d) => d?.textContent,
           authenticationCodeElement
         );
         debug("Printing the authentication code to console");
@@ -320,39 +297,32 @@ const states = [
     name: "TFA failed",
     selector: `#idDiv_SAASDS_Description,#idDiv_SAASTO_Description`,
     async handler(
-      page: puppeteer.Page,
-      selected: puppeteer.ElementHandle
+      page: Page,
+      selected: ElementHandle
     ): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const descriptionMessage = await page.evaluate(
-        // eslint-disable-next-line
         (description) => description.textContent,
         selected
       );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      throw new CLIError(descriptionMessage);
+      throw new CLIError(descriptionMessage || "");
     },
   },
   {
     name: "TFA code input",
     selector: "input[name=otc]:not(.moveOffScreen)",
-    async handler(page: puppeteer.Page): Promise<void> {
+    async handler(page: Page): Promise<void> {
       const error = await page.$(".alert-error");
       if (error) {
         debug("Found error message. Displaying");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const errorMessage = await page.evaluate(
-          // eslint-disable-next-line
           (err) => err.textContent,
           error
         );
         console.log(errorMessage);
       } else {
         const description = await page.$("#idDiv_SAOTCC_Description");
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         const descriptionMessage = await page.evaluate(
-          // eslint-disable-next-line
-          (d) => d.textContent,
+          (d) => d?.textContent,
           description
         );
         console.log(descriptionMessage);
@@ -400,8 +370,8 @@ const states = [
     name: "Remember me",
     selector: `#KmsiDescription`,
     async handler(
-      page: puppeteer.Page,
-      _selected: puppeteer.ElementHandle,
+      page: Page,
+      _selected: ElementHandle,
       _noPrompt: boolean,
       _defaultUsername: string,
       _defaultPassword: string | undefined,
@@ -423,17 +393,14 @@ const states = [
     name: "Service exception",
     selector: "#service_exception_message",
     async handler(
-      page: puppeteer.Page,
-      selected: puppeteer.ElementHandle
+      page: Page,
+      selected: ElementHandle
     ): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const descriptionMessage = await page.evaluate(
-        // eslint-disable-next-line
         (description) => description.textContent,
         selected
       );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      throw new CLIError(descriptionMessage);
+      throw new CLIError(descriptionMessage || "");
     },
   },
 ];
@@ -687,7 +654,7 @@ export const login = {
   ): Promise<string> {
     debug("Loading login page in Chrome");
 
-    let browser: puppeteer.Browser | undefined;
+    let browser: Browser | undefined;
 
     try {
       const args = headless
@@ -718,7 +685,7 @@ export const login = {
         args.push("--disable-gpu");
       }
 
-      browser = await puppeteer.launch({
+      browser = await launch({
         headless,
         args,
         ignoreDefaultArgs,
