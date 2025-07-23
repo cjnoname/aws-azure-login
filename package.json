@@ -1,6 +1,6 @@
 {
   "name": "@cj-tech-master/aws-azure-login",
-  "version": "3.6.6",
+  "version": "3.6.7",
   "description": "Use Azure AD SSO to log into the AWS CLI.",
   "main": "index.js",
   "author": {
